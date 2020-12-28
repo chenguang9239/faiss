@@ -21,6 +21,8 @@
 #include "IndexFlat.h"
 #include "AuxIndexStructures.h"
 
+#include <iostream>
+
 namespace faiss {
 
 /*****************************************
@@ -76,7 +78,7 @@ void Level1Quantizer::train_q1 (size_t n, const float *x, bool verbose, MetricTy
         if (clustering_index) {
             clus.train (n, x, *clustering_index);
             quantizer->add (nlist, clus.centroids.data());
-        } else {
+        } else { //倒排走这个分支
             clus.train (n, x, *quantizer);
         }
         quantizer->is_trained = true;
@@ -297,6 +299,31 @@ void IndexIVF::search (idx_t n, const float *x, idx_t k,
 
 }
 
+void IndexIVF::condition_search(idx_t n, const float *x, idx_t k,
+                                float *distances, idx_t *labels, const std::vector<int> &filter_bit_index) const
+{
+    long * idx = new long [n * nprobe];
+    ScopeDeleter<long> del (idx);
+    float * coarse_dis = new float [n * nprobe];
+    ScopeDeleter<float> del2 (coarse_dis);
+
+    quantizer->search (n, x, nprobe, coarse_dis, idx);
+
+    invlists->prefetch_lists (idx, n * nprobe);
+
+    condition_search_preassigned (n, x, k, idx, coarse_dis,
+                        distances, labels, false, filter_bit_index);
+}
+
+void IndexIVF::condition_search_preassigned(idx_t n, const float *x, idx_t k,
+                                            const idx_t *assign,
+                                            const float *centroid_dis,
+                                            float *distances, idx_t *labels,
+                                            bool store_pairs,
+                                            const std::vector<int> &filter_bit_index) const {
+
+}
+
 
 void IndexIVF::reconstruct (idx_t key, float* recons) const
 {
@@ -420,7 +447,11 @@ long IndexIVF::remove_ids (const IDSelector & sel)
 
 
 
-
+/**
+ *
+ * @param n 待索引向量的个数
+ * @param x 待索引向量的数组
+ */
 void IndexIVF::train (idx_t n, const float *x)
 {
     if (verbose)

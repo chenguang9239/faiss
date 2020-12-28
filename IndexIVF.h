@@ -224,6 +224,37 @@ struct IndexIVF: Index, Level1Quantizer {
     virtual void search (idx_t n, const float *x, idx_t k,
                          float *distances, idx_t *labels) const override;
 
+    /**
+     * user defined
+     * @param n
+     * @param x
+     * @param k
+     * @param distances
+     * @param labels
+     * @param filter_key
+     */
+    virtual void condition_search(idx_t n, const float *x, idx_t k,
+                                  float *distances, idx_t *labels, const std::vector<int> &filter_bit_index) const override;
+
+    /**
+     * user defined
+     * @param n
+     * @param x
+     * @param k
+     * @param assign
+     * @param centroid_dis
+     * @param distances
+     * @param labels
+     * @param store_pairs
+     * @param filter_key
+     */
+    virtual void condition_search_preassigned(idx_t n, const float *x, idx_t k,
+                                              const idx_t *assign,
+                                              const float *centroid_dis,
+                                              float *distances, idx_t *labels,
+                                              bool store_pairs,
+                                              const std::vector<int> &filter_bit_index) const;
+
     void reconstruct (idx_t key, float* recons) const override;
 
     /** Reconstruct a subset of the indexed vectors.

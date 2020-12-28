@@ -18,6 +18,13 @@
 #include <string>
 #include <sstream>
 
+/*
+ * user defined begin
+ */
+#include <vector>
+/*
+ * user defined end
+ */
 
 /**
  * @namespace faiss
@@ -71,6 +78,14 @@ struct Index {
     /// type of metric this index uses for search
     MetricType metric_type;
 
+    /*
+    * user defined begin
+    */
+    static bool (*doFilter)(long index, const std::vector<int> &);
+    /*
+    * user defined end
+    */
+
     explicit Index (idx_t d = 0, MetricType metric = METRIC_L2):
                     d(d),
                     ntotal(0),
@@ -117,6 +132,18 @@ struct Index {
      */
     virtual void search (idx_t n, const float *x, idx_t k,
                          float *distances, idx_t *labels) const = 0;
+
+    /**
+     * user defined
+     * @param n
+     * @param x
+     * @param k
+     * @param distances
+     * @param labels
+     * @param filter_key
+     */
+    virtual void condition_search(idx_t n, const float *x, idx_t k,
+                                  float *distances, idx_t *labels, const std::vector<int> &filter_bit_index) const;
 
     /** query n vectors of dimension d to the index.
      *
@@ -190,8 +217,11 @@ struct Index {
     /** Display the actual class name and some more info */
     void display () const;
 
-
-
+    /**
+     * user defined
+     * @param doFilter_ptr
+     */
+    static void set_filter(bool (*doFilter_ptr)(long index, const std::vector<int> &));
 };
 
 }

@@ -41,6 +41,25 @@ struct IndexIVFFlat: IndexIVF {
                              float *distances, idx_t *labels,
                              bool store_pairs) const override;
 
+    /**
+     * user defined
+     * @param n
+     * @param x
+     * @param k
+     * @param assign
+     * @param centroid_dis
+     * @param distances
+     * @param labels
+     * @param store_pairs
+     * @param filter_key
+     */
+    void condition_search_preassigned(idx_t n, const float *x, idx_t k,
+                                      const idx_t *assign,
+                                      const float *centroid_dis,
+                                      float *distances, idx_t *labels,
+                                      bool store_pairs,
+                                      const std::vector<int> &filter_bit_index) const override;
+
     void range_search(
         idx_t n,
         const float* x,

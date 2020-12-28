@@ -15,6 +15,15 @@
 
 namespace faiss {
 
+/*
+* user defined begin
+*/
+bool (*Index::doFilter)(long index, const std::vector<int> &) = nullptr;
+
+/*
+* user defined end
+*/
+
 Index::~Index ()
 {
 }
@@ -30,7 +39,13 @@ void Index::range_search (idx_t , const float *, float,
 {
   FAISS_THROW_MSG ("range search not implemented");
 }
-
+/**
+ * 使用者注释，遍历找到每个向量最近的聚类中心点
+ * @param n 待索引向量的个数
+ * @param x 待索引向量的数组
+ * @param labels 存放每个向量距离最近的中心点ID
+ * @param k 1 (取 top 1) 其中k=1, 即查询最近的一个
+ */
 void Index::assign (idx_t n, const float * x, idx_t * labels, idx_t k)
 {
   float * distances = new float[n * k];
@@ -93,6 +108,15 @@ void Index::compute_residual (const float * x,
 
 void Index::display () const {
   printf ("Index: %s  -> %ld elements\n", typeid (*this).name(), ntotal);
+}
+
+void Index::condition_search(idx_t n, const float *x, idx_t k,
+                             float *distances, idx_t *labels, const std::vector<int> &filter_bit_index) const {
+
+}
+
+void Index::set_filter(bool (*doFilter_ptr)(long index, const std::vector<int> &)){
+  doFilter = doFilter_ptr;
 }
 
 }

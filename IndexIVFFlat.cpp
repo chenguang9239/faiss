@@ -20,6 +20,15 @@
 #include "IndexFlat.h"
 #include "AuxIndexStructures.h"
 
+/*
+ * user defined begin
+ */
+#include <vector>
+#include <iostream>
+/*
+ * user defined end
+ */
+
 namespace faiss {
 
 
@@ -62,6 +71,7 @@ void IndexIVFFlat::add_core (idx_t n, const float * x, const long *xids,
         idx = idx0;
     }
     long n_add = 0;
+    // 走到这一步时，ntotal=0
     for (size_t i = 0; i < n; i++) {
         long id = xids ? xids[i] : ntotal + i;
         long list_no = idx [i];
@@ -129,9 +139,72 @@ void search_knn_inner_product (const IndexIVFFlat & ivf,
                 const float * yj = list_vecs + d * j;
                 float ip = fvec_inner_product (xi, yj, d);
                 if (ip > simi[0]) {
-                    minheap_pop (k, simi, idxi);
+                    minheap_pop(k, simi, idxi);
                     long id = store_pairs ? (key << 32 | j) : ids[j];
-                    minheap_push (k, simi, idxi, ip, id);
+                    minheap_push(k, simi, idxi, ip, id);
+                }
+            }
+            nscan += list_size;
+            if (ivf.max_codes && nscan >= ivf.max_codes)
+                break;
+        }
+        ndis += nscan;
+        minheap_reorder (k, simi, idxi);
+    }
+    indexIVF_stats.nq += nx;
+    indexIVF_stats.nlist += nlistv;
+    indexIVF_stats.ndis += ndis;
+}
+
+void condition_search_knn_inner_product(const IndexIVFFlat &ivf,
+                                        size_t nx,
+                                        const float *x,
+                                        const long *keys,
+                                        float_minheap_array_t *res,
+                                        bool store_pairs,
+                                        const std::vector<int> &filter_bit_index)
+{
+
+    const size_t k = res->k;
+    size_t nlistv = 0, ndis = 0;
+    size_t d = ivf.d;
+
+#pragma omp parallel for reduction(+: nlistv, ndis)
+    for (size_t i = 0; i < nx; i++) {
+        const float * xi = x + i * d;
+        const long * keysi = keys + i * ivf.nprobe;
+        float * __restrict simi = res->get_val (i);
+        long * __restrict idxi = res->get_ids (i);
+        minheap_heapify (k, simi, idxi);
+        size_t nscan = 0;
+
+        for (size_t ik = 0; ik < ivf.nprobe; ik++) {
+            long key = keysi[ik];  /* select the list  */
+            if (key < 0) {
+                // not enough centroids for multiprobe
+                continue;
+            }
+            FAISS_THROW_IF_NOT_FMT (
+                    key < (long) ivf.nlist,
+                    "Invalid key=%ld  at ik=%ld nlist=%ld\n",
+                    key, ik, ivf.nlist);
+
+            nlistv++;
+            size_t list_size = ivf.invlists->list_size(key);
+            const float * list_vecs =
+                    (const float*)ivf.invlists->get_codes (key);
+            const Index::idx_t * ids = store_pairs ? nullptr :
+                                       ivf.invlists->get_ids (key);
+
+            for (size_t j = 0; j < list_size; j++) {
+                const float * yj = list_vecs + d * j;
+                float ip = fvec_inner_product (xi, yj, d);
+                if (ip > simi[0] ) {
+                    long id = store_pairs ? (key << 32 | j) : ids[j];
+                    if (!Index::doFilter(id, filter_bit_index)) {
+                        minheap_pop(k, simi, idxi);
+                        minheap_push(k, simi, idxi, ip, id);
+                    }
                 }
             }
             nscan += list_size;
@@ -224,6 +297,25 @@ void IndexIVFFlat::search_preassigned (idx_t n, const float *x, idx_t k,
         float_maxheap_array_t res = {
             size_t(n), size_t(k), labels, distances};
         search_knn_L2sqr (*this, n, x, idx, &res, store_pairs);
+    }
+}
+
+
+void IndexIVFFlat::condition_search_preassigned(idx_t n, const float *x, idx_t k,
+                                                const idx_t *idx,
+                                                const float * /* coarse_dis */,
+                                                float *distances, idx_t *labels,
+                                                bool store_pairs,
+                                                const std::vector<int> &filter_bit_index) const {
+    if (metric_type == METRIC_INNER_PRODUCT) {
+        float_minheap_array_t res = {
+                size_t(n), size_t(k), labels, distances};
+        condition_search_knn_inner_product(*this, n, x, idx, &res, store_pairs, filter_bit_index);
+
+    } else if (metric_type == METRIC_L2) {
+        float_maxheap_array_t res = {
+                size_t(n), size_t(k), labels, distances};
+        search_knn_L2sqr(*this, n, x, idx, &res, store_pairs);
     }
 }
 
